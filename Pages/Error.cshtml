@@ -1,0 +1,19 @@
+@page
+@model ErrorModel
+@{
+    ViewData["Title"] = "Noe gikk galt";
+}
+
+<div class="error-page">
+    <h1>Noe gikk galt</h1>
+    <p>Det oppsto en feil under behandlingen av forespørselen. Prøv gjerne igjen.</p>
+
+    @if (Model.ShowRequestId)
+    {
+        <p>
+            <strong>Forespørsels-ID:</strong> <code>@Model.RequestId</code>
+        </p>
+    }
+
+    <p><a class="btn-primary" asp-page="/Index">Tilbake til middagsplanleggeren</a></p>
+</div>

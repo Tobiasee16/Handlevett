@@ -1,0 +1,302 @@
+@page
+@using Handlevett.Services
+@model ProductsModel
+@{
+    ViewData["Title"] = "Varer";
+}
+
+<div class="products-page">
+
+    <div class="page-header">
+        <p class="eyebrow-dark">Handlevett</p>
+        <h1 class="page-title">Varesøk</h1>
+        <p class="page-subtitle">
+            Bla gjennom dagens matvarer, filtrer på type og butikk, og velg hvilke råvarer
+            du vil bygge en middag av.
+        </p>
+    </div>
+
+    <div class="products-shell">
+
+        <!-- ── Filtre ── -->
+        <aside class="products-filters" aria-label="Filtre">
+
+            <div class="filter-section">
+                <span class="section-label" id="label-category">Kategori</span>
+                <div class="filter-chip-group" id="filter-category" role="group" aria-labelledby="label-category">
+                    <button type="button" class="filter-chip" data-value="all" aria-pressed="true">Alle</button>
+                    <button type="button" class="filter-chip" data-value="protein" aria-pressed="false">Protein</button>
+                    <button type="button" class="filter-chip" data-value="vegetable" aria-pressed="false">Grønnsak</button>
+                    <button type="button" class="filter-chip" data-value="staple" aria-pressed="false">Basisvare</button>
+                    <button type="button" class="filter-chip" data-value="dairy" aria-pressed="false">Meieri</button>
+                    <button type="button" class="filter-chip" data-value="sauce" aria-pressed="false">Saus</button>
+                </div>
+            </div>
+
+            <div class="filter-section" id="meat-filter-section">
+                <span class="section-label" id="label-meattype">Proteintype</span>
+                <div class="filter-chip-group" id="filter-meattype" role="group" aria-labelledby="label-meattype">
+                    <button type="button" class="filter-chip" data-value="all" aria-pressed="true">Alle</button>
+                    <button type="button" class="filter-chip" data-value="meat" aria-pressed="false">Kjøtt</button>
+                    <button type="button" class="filter-chip" data-value="fish" aria-pressed="false">Fisk</button>
+                    <button type="button" class="filter-chip" data-value="plant" aria-pressed="false">Plante</button>
+                </div>
+            </div>
+
+            <div class="filter-section">
+                <span class="section-label" id="label-store">Butikk</span>
+                <div class="filter-chip-group" id="filter-store" role="group" aria-labelledby="label-store">
+                    <button type="button" class="filter-chip" data-value="all" aria-pressed="true">Alle</button>
+                    @foreach (var store in Model.Stores)
+                    {
+                        <button type="button" class="filter-chip" data-value="@store.ToLowerInvariant()"
+                                aria-pressed="false">@store</button>
+                    }
+                </div>
+            </div>
+
+            <div class="filter-section">
+                <span class="section-label">Tilbud</span>
+                <label class="toggle-tile filter-toggle">
+                    <input type="checkbox" id="filter-onsale" />
+                    <span>Kun på tilbud</span>
+                </label>
+            </div>
+
+            <div class="filter-section">
+                <label class="section-label" for="filter-sort">Sorter etter</label>
+                <select class="field-select filter-select" id="filter-sort">
+                    <option value="price">Billigst per kg</option>
+                    <option value="discount">Størst rabatt</option>
+                    <option value="protein">Mest protein</option>
+                </select>
+            </div>
+
+            <div class="filter-section">
+                <button type="button" class="btn-secondary" id="btn-clear-selection">Nullstill valg</button>
+            </div>
+
+        </aside>
+
+        <!-- ── Varer ── -->
+        <section aria-label="Varer">
+            <p id="no-results" class="products-empty" hidden>
+                Ingen varer passer til filtrene.
+            </p>
+
+            <div class="product-grid" id="product-grid">
+                @foreach (var product in Model.Products)
+                {
+                    var subtype = ProductsModel.ProteinSubtype(product);
+                    var cardId = $"product-{product.Id.GetHashCode():x8}";
+
+                    @* Numeric data- attributes are written with InvariantCulture on purpose.
+                       The page runs under nb-NO, where "12,34" would make parseFloat return 12
+                       and silently break the price and protein sorting below. *@
+                    <article class="product-card"
+                             data-category="@product.Category"
+                             data-meattype="@subtype"
+                             data-store="@product.Store.ToLowerInvariant()"
+                             data-discount="@(product.DiscountPercent > 0 ? "true" : "false")"
+                             data-price="@Format.Data(product.PricePerKilo)"
+                             data-discountpct="@Format.Data(product.DiscountPercent)"
+                             data-protein="@Format.Data(product.ProteinPer100Grams)">
+
+                        <label class="product-select">
+                            <input type="checkbox" class="product-checkbox" value="@product.IngredientKey" />
+                            <span class="product-card-body">
+                                <!-- Forside -->
+                                <span class="card-face card-face--main">
+                                    <span class="product-card-top">
+                                        <span class="product-name">@product.Name</span>
+                                        @if (product.DiscountPercent > 0)
+                                        {
+                                            <span class="product-discount-badge">−@product.DiscountPercent %</span>
+                                        }
+                                    </span>
+                                    <span class="product-meta-row">
+                                        <span class="product-price-main">@Format.KrPerKg(product.PricePerKilo)</span>
+                                        <span class="product-store">@product.Store</span>
+                                        <span class="product-category-tag product-category-tag--@product.Category">
+                                            @ProductsModel.CategoryLabel(product.Category)
+                                        </span>
+                                    </span>
+                                </span>
+
+                                <!-- Næringsinnhold -->
+                                <span class="card-face card-face--nutrition" id="@cardId">
+                                    <span class="nutrition-label">@product.Name</span>
+                                    <span class="nutrition-stats">
+                                        <span class="nutrition-stat">
+                                            <span class="nutrition-stat-value">@Format.GramsExact(product.ProteinPer100Grams)</span>
+                                            <span class="nutrition-stat-label">protein/100 g</span>
+                                        </span>
+                                        <span class="nutrition-stat">
+                                            <span class="nutrition-stat-value">@Format.Number(product.CaloriesPer100Grams)</span>
+                                            <span class="nutrition-stat-label">kcal/100 g</span>
+                                        </span>
+                                        <span class="nutrition-stat">
+                                            <span class="nutrition-stat-value">@Format.Kr(product.PackagePrice)</span>
+                                            <span class="nutrition-stat-label">@Format.Grams(product.PackageGrams)</span>
+                                        </span>
+                                    </span>
+                                </span>
+                            </span>
+                        </label>
+
+                        @* The toggle sits outside the label — a <button> nested inside a <label>
+                           is invalid and forces event-capture workarounds to stay usable. *@
+                        <button type="button" class="card-info-btn"
+                                aria-expanded="false" aria-controls="@cardId"
+                                title="Vis næringsinnhold">
+                            <span class="visually-hidden">Vis næringsinnhold for @product.Name</span>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                 stroke-linecap="round" aria-hidden="true">
+                                <circle cx="12" cy="12" r="9" />
+                                <path d="M12 11v5M12 8h.01" />
+                            </svg>
+                        </button>
+                    </article>
+                }
+            </div>
+        </section>
+
+    </div>
+</div>
+
+<!-- Fast valglinje -->
+<div class="selection-bar" id="selection-bar" aria-live="polite">
+    <span><span id="selection-count">0</span> varer valgt</span>
+    <a class="btn-primary selection-bar-action" id="btn-plan" href="#">Lag middag av utvalget</a>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    'use strict';
+
+    var categoryFilter = 'all';
+    var meatFilter = 'all';
+    var storeFilter = 'all';
+    var onSaleOnly = false;
+    var sortMode = 'price';
+
+    var grid = document.getElementById('product-grid');
+    var cards = Array.prototype.slice.call(grid.querySelectorAll('.product-card'));
+
+    function applyFilters() {
+        cards.sort(function (a, b) {
+            if (sortMode === 'price')    return parseFloat(a.dataset.price)       - parseFloat(b.dataset.price);
+            if (sortMode === 'discount') return parseFloat(b.dataset.discountpct) - parseFloat(a.dataset.discountpct);
+            if (sortMode === 'protein')  return parseFloat(b.dataset.protein)     - parseFloat(a.dataset.protein);
+            return 0;
+        });
+        grid.append.apply(grid, cards);
+
+        var visible = 0;
+
+        cards.forEach(function (card) {
+            var show = true;
+            if (categoryFilter !== 'all' && card.dataset.category !== categoryFilter) show = false;
+            if (categoryFilter === 'protein' && meatFilter !== 'all' && card.dataset.meattype !== meatFilter) show = false;
+            if (storeFilter !== 'all' && card.dataset.store !== storeFilter) show = false;
+            if (onSaleOnly && card.dataset.discount !== 'true') show = false;
+
+            card.hidden = !show;
+
+            // Collapse any flipped card when the set of results changes.
+            card.classList.remove('product-card--info');
+            var toggle = card.querySelector('.card-info-btn');
+            if (toggle) toggle.setAttribute('aria-expanded', 'false');
+
+            if (show) visible++;
+        });
+
+        document.getElementById('no-results').hidden = visible !== 0;
+        document.getElementById('meat-filter-section').hidden =
+            !(categoryFilter === 'all' || categoryFilter === 'protein');
+    }
+
+    function setPressed(group, chip) {
+        group.querySelectorAll('.filter-chip').forEach(function (c) {
+            c.setAttribute('aria-pressed', String(c === chip));
+        });
+    }
+
+    function bindChipGroup(groupId, onSelect) {
+        var group = document.getElementById(groupId);
+        group.addEventListener('click', function (e) {
+            var chip = e.target.closest('.filter-chip');
+            if (!chip) return;
+            setPressed(group, chip);
+            onSelect(chip.dataset.value);
+            applyFilters();
+        });
+    }
+
+    function resetChips(groupId) {
+        var group = document.getElementById(groupId);
+        var chips = group.querySelectorAll('.filter-chip');
+        if (chips.length) setPressed(group, chips[0]);
+    }
+
+    bindChipGroup('filter-category', function (v) {
+        categoryFilter = v;
+        if (v !== 'protein') { meatFilter = 'all'; resetChips('filter-meattype'); }
+    });
+    bindChipGroup('filter-meattype', function (v) { meatFilter = v; });
+    bindChipGroup('filter-store',    function (v) { storeFilter = v; });
+
+    document.getElementById('filter-onsale').addEventListener('change', function () {
+        onSaleOnly = this.checked;
+        applyFilters();
+    });
+
+    document.getElementById('filter-sort').addEventListener('change', function () {
+        sortMode = this.value;
+        applyFilters();
+    });
+
+    // ── Utvalg ──
+    function updateSelectionBar() {
+        var checked = Array.prototype.slice.call(grid.querySelectorAll('.product-checkbox:checked'));
+        document.getElementById('selection-count').textContent = checked.length;
+        document.getElementById('selection-bar')
+            .classList.toggle('selection-bar--visible', checked.length > 0);
+
+        if (checked.length > 0) {
+            // Several products can share one ingredient key — de-duplicate.
+            var unique = checked
+                .map(function (cb) { return cb.value; })
+                .filter(function (v, i, a) { return a.indexOf(v) === i; });
+            document.getElementById('btn-plan').href = '/?pinned=' + encodeURIComponent(unique.join(','));
+        }
+    }
+
+    grid.addEventListener('change', function (e) {
+        if (!e.target.classList.contains('product-checkbox')) return;
+        e.target.closest('.product-card').classList.toggle('product-card--selected', e.target.checked);
+        updateSelectionBar();
+    });
+
+    document.getElementById('btn-clear-selection').addEventListener('click', function () {
+        grid.querySelectorAll('.product-checkbox:checked').forEach(function (cb) {
+            cb.checked = false;
+            cb.closest('.product-card').classList.remove('product-card--selected');
+        });
+        updateSelectionBar();
+    });
+
+    // ── Kortvending (info/næringsinnhold) ──
+    grid.addEventListener('click', function (e) {
+        var btn = e.target.closest('.card-info-btn');
+        if (!btn) return;
+        var card = btn.closest('.product-card');
+        var open = card.classList.toggle('product-card--info');
+        btn.setAttribute('aria-expanded', String(open));
+    });
+
+    applyFilters();
+}());
+</script>
+}

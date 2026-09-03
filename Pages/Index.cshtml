@@ -1,0 +1,321 @@
+@page
+@using Handlevett.Services
+@model IndexModel
+@{
+    ViewData["Title"] = "Middagsplanlegger";
+    ViewData["EmptyRender"] = Model.HasProducts ? "false" : "true";
+    var topPicks = Model.Recommendations.Take(3).ToArray();
+}
+
+<div id="reload-prompt-slot"></div>
+
+@* Shown while a plan is being built. The form is a full-page POST that can block for up to two
+   minutes on a cold Ollama call, so the page has to say it is working. *@
+<div class="plan-busy" id="plan-busy" role="status" aria-live="polite" hidden>
+    <span class="spinner" aria-hidden="true"></span>
+    <div class="plan-busy-text">
+        <strong id="plan-busy-title">Lager middagsplan…</strong>
+        <span id="plan-busy-detail">Henter priser og rangerer oppskrifter.</span>
+    </div>
+    <span class="plan-busy-elapsed" id="plan-busy-elapsed"></span>
+</div>
+
+<section class="planner-shell">
+    <aside class="planner-panel" aria-label="Innstillinger for middagsplan">
+        <div class="brand-block">
+            <p class="eyebrow">Handlevett</p>
+            <h1>Billige middager av dagens tilbud.</h1>
+            <p class="brand-lede">
+                Sett rammene dine, så rangerer vi oppskrifter etter pris, tilbud,
+                kalorier, protein og hvor godt råvarene kan gjenbrukes.
+            </p>
+        </div>
+
+        <form method="post" class="planner-form">
+            <div asp-validation-summary="ModelOnly" class="form-error"></div>
+
+            <div>
+                <label class="field-label" asp-for="Planner.BudgetNok">Budsjett</label>
+                <div class="field-row">
+                    <input asp-for="Planner.BudgetNok" class="field-input" type="number"
+                           min="40" max="2000" step="10" required />
+                    <span class="field-unit">kr</span>
+                </div>
+                <span asp-validation-for="Planner.BudgetNok" class="form-error"></span>
+            </div>
+
+            <div>
+                <label class="field-label" asp-for="Planner.TargetCalories">Kalorimål</label>
+                <div class="field-row">
+                    <input asp-for="Planner.TargetCalories" class="field-input" type="number"
+                           min="300" max="5000" step="50" required />
+                    <span class="field-unit">kcal</span>
+                </div>
+                <span asp-validation-for="Planner.TargetCalories" class="form-error"></span>
+            </div>
+
+            <div>
+                <label class="field-label" asp-for="Planner.PreferredStore">Foretrukket butikk</label>
+                <select asp-for="Planner.PreferredStore" class="field-select">
+                    @foreach (var store in Model.Stores)
+                    {
+                        <option value="@store">@(store == "Any" ? "Alle butikker" : store)</option>
+                    }
+                </select>
+            </div>
+
+            <div class="preference-grid" role="group" aria-label="Preferanser">
+                <label class="toggle-tile">
+                    <input asp-for="Planner.HighProtein" />
+                    <span>Mye protein</span>
+                </label>
+                <label class="toggle-tile">
+                    <input asp-for="Planner.MealPrep" />
+                    <span>Matprep</span>
+                </label>
+                <label class="toggle-tile">
+                    <input asp-for="Planner.QuickMeals" />
+                    <span>Rask middag</span>
+                </label>
+                <label class="toggle-tile">
+                    <input asp-for="Planner.Vegetarian" />
+                    <span>Vegetar</span>
+                </label>
+            </div>
+
+            @foreach (var pinned in Model.PinnedIngredients)
+            {
+                <input type="hidden" name="Planner.PinnedIngredients" value="@pinned" />
+            }
+
+            <button class="btn-primary" type="submit" id="plan-submit">
+                <span class="spinner btn-spinner" aria-hidden="true"></span>
+                <span class="btn-label">Lag middagsplan</span>
+            </button>
+        </form>
+
+        @if (Model.BestBuys.Count > 0)
+        {
+            <div class="panel-best-buys">
+                <p class="section-label">Beste kjøp akkurat nå</p>
+                @foreach (var item in Model.BestBuys)
+                {
+                    <div class="panel-buy-item panel-buy-item--@item.Kind">
+                        <div class="panel-buy-label">@item.Label</div>
+                        <div class="panel-buy-product" title="@item.ProductName">@item.ProductName</div>
+                        <div class="panel-buy-row">
+                            <span class="panel-buy-store">@item.Store</span>
+                            <span class="panel-buy-metric">@item.Metric</span>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </aside>
+
+    <main class="recommendations" aria-label="Anbefalte middager">
+        @if (!Model.HasProducts)
+        {
+            <div class="empty-state empty-state--danger">
+                <span class="empty-state-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round">
+                        <path d="M12 8v5M12 17h.01" />
+                        <circle cx="12" cy="12" r="9" />
+                    </svg>
+                </span>
+                <h2>Ingen matvaredata tilgjengelig</h2>
+                <p>@Model.PriceSourceDetail</p>
+                <code>dotnet user-secrets set "Kassalapp:ApiKey" "DIN_NØKKEL_HER"</code>
+            </div>
+        }
+        else if (Model.Recommendations.Count == 0 && Model.PinnedIngredients.Count > 0)
+        {
+            <div class="empty-state">
+                <span class="empty-state-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="m20 20-3.5-3.5" />
+                    </svg>
+                </span>
+                <h2>Ingen oppskrifter passet til varene du valgte</h2>
+                <p>
+                    Råvarene du valgte (@string.Join(", ", Model.PinnedIngredients)) dekker ikke alle
+                    ingrediensene noen oppskrift trenger. Velg gjerne flere varer, eller
+                    <a href="/">lag en plan uten filter</a>.
+                </p>
+            </div>
+        }
+        else if (Model.Recommendations.Count == 0)
+        {
+            <div class="empty-state">
+                <span class="empty-state-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="m20 20-3.5-3.5" />
+                    </svg>
+                </span>
+                <h2>Ingen oppskrifter innenfor rammene dine</h2>
+                <p>Prøv å øke budsjettet eller slå av noen preferanser.</p>
+            </div>
+        }
+
+        <section class="summary-band" aria-label="Oppsummering">
+            <div class="summary-cell">
+                <span class="metric-label">Pris topp 3</span>
+                <span class="metric-value">@Format.Kr(Model.EstimatedPlanCost)</span>
+                <span class="metric-note">@Format.Kcal(Model.EstimatedPlanCalories) totalt</span>
+            </div>
+            <div class="summary-cell">
+                <span class="metric-label">Oppskrifter rangert</span>
+                <span class="metric-value">@Model.Recommendations.Count</span>
+                <span class="metric-note">@Model.AvailableProductCount varer i utvalget</span>
+            </div>
+            <div class="summary-cell">
+                <span class="metric-label">Matvarepriser</span>
+                <span class="source-badge @(Model.HasLivePrices ? "source-badge--live" : "source-badge--fallback")">
+                    @Model.PriceSourceText
+                </span>
+                <span class="metric-note">@Model.PriceSourceDetail</span>
+            </div>
+            <div class="summary-cell">
+                <span class="metric-label">Oppskriftskilde</span>
+                <span class="source-badge @(Model.HasAiRecipes ? "source-badge--live" : "source-badge--fallback")">
+                    @Model.RecipeSourceText
+                </span>
+                <span class="metric-note">@Model.RecipeSourceDetail</span>
+            </div>
+        </section>
+
+        <section class="result-list">
+            @foreach (var (recommendation, rank) in topPicks.Select((r, i) => (r, i + 1)))
+            {
+                var isAi = recommendation.Recipe.Id.StartsWith("ollama-");
+                <article class="meal-card @(rank == 1 ? "meal-card--top" : "")">
+                    <div class="meal-card-header">
+                        <div>
+                            <div class="card-meta">
+                                <span class="score-pill" title="Samlet poengsum">
+                                    @Format.Number(recommendation.Score, 1)
+                                </span>
+                                @if (rank == 1)
+                                {
+                                    <span class="rank-badge">Beste valg</span>
+                                }
+                                @if (isAi)
+                                {
+                                    <span class="ai-badge">KI-generert</span>
+                                }
+                            </div>
+                            <h2>@recommendation.Recipe.Name</h2>
+                            <p class="meal-lede">@recommendation.Recipe.Description</p>
+                            @if (recommendation.Recipe.Tags.Count > 0)
+                            {
+                                <div class="tag-chips">
+                                    @foreach (var tag in recommendation.Recipe.Tags)
+                                    {
+                                        <span class="tag-chip tag-chip--@tag">@IndexModel.TagLabel(tag)</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        <div class="meal-price">
+                            <span class="meal-price-total">@Format.KrExact(recommendation.TotalCost)</span>
+                            <span class="meal-price-unit">
+                                @Format.KrExact(recommendation.CostPerServing) per porsjon
+                            </span>
+                        </div>
+                    </div>
+
+                    @* Nutrition figures are all per portion, so the two are directly comparable.
+                       Prep time and portion count are recipe properties, not nutrients. *@
+                    <div class="meal-stats">
+                        <span class="meal-stat">
+                            <b>@Format.Kcal(recommendation.CaloriesPerServing)</b><span>per porsjon</span>
+                        </span>
+                        <span class="meal-stat">
+                            <b>@Format.GramsExact(recommendation.ProteinPerServing)</b><span>protein per porsjon</span>
+                        </span>
+                        <span class="meal-stat">
+                            <b>@recommendation.Recipe.PrepMinutes min</b><span>tilberedning</span>
+                        </span>
+                        <span class="meal-stat">
+                            <b>@recommendation.Recipe.Servings</b><span>porsjoner</span>
+                        </span>
+                    </div>
+
+                    @* The top pick opens by default — it is the page's actual answer,
+                       so it should not be hidden behind a click. *@
+                    <details class="card-details" open="@(rank == 1 ? "open" : null)">
+                        <summary>Ingredienser og detaljer</summary>
+                        <div class="card-details-grid">
+                            <div>
+                                <h3>Handleestimat</h3>
+                                <ul class="ingredient-list">
+                                    @foreach (var item in recommendation.Ingredients)
+                                    {
+                                        <li>
+                                            <span>@item.Ingredient.DisplayName</span>
+                                            <span class="ingredient-price">
+                                                @Format.KrExact(item.EstimatedCost)
+                                                @if (item.Product.DiscountPercent > 0)
+                                                {
+                                                    <span class="discount-badge">−@item.Product.DiscountPercent %</span>
+                                                }
+                                            </span>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                            <div>
+                                <h3>Hvorfor den ble rangert slik</h3>
+                                <ul class="reason-list">
+                                    @foreach (var reason in recommendation.Reasons)
+                                    {
+                                        <li>@reason</li>
+                                    }
+                                </ul>
+                            </div>
+                        </div>
+
+                        @if (recommendation.Recipe.RecipeSteps.Count > 0)
+                        {
+                            <div class="steps-section">
+                                <h3>Slik lager du den</h3>
+                                <ol>
+                                    @foreach (var step in recommendation.Recipe.RecipeSteps)
+                                    {
+                                        <li>@step</li>
+                                    }
+                                </ol>
+                            </div>
+                        }
+                    </details>
+                </article>
+            }
+        </section>
+
+        @if (Model.Recommendations.Count > 3)
+        {
+            <section class="more-results">
+                <h2>Flere alternativer</h2>
+                <div class="compact-grid">
+                    @foreach (var recommendation in Model.Recommendations.Skip(3))
+                    {
+                        <article class="compact-card">
+                            <span class="compact-name">@recommendation.Recipe.Name</span>
+                            <div class="compact-row">
+                                <span class="compact-price">@Format.Kr(recommendation.TotalCost)</span>
+                                <span class="compact-meta">
+                                    @Format.Kcal(recommendation.CaloriesPerServing) per porsjon
+                                </span>
+                            </div>
+                        </article>
+                    }
+                </div>
+            </section>
+        }
+    </main>
+</section>

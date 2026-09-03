@@ -1,0 +1,81 @@
+@{
+    var currentPage = ViewContext.RouteData.Values["page"] as string ?? string.Empty;
+    string NavCurrent(string page) => currentPage.Equals(page, StringComparison.OrdinalIgnoreCase) ? "page" : null!;
+}
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] – Handlevett</title>
+    <meta name="description" content="Handlevett rangerer billige middager ut fra dagens matvarepriser, tilbud, kalorier og protein." />
+    <meta name="theme-color" content="#f7f5f1" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e1614" media="(prefers-color-scheme: dark)" />
+
+    @* Stamp the stored theme before first paint so there is no flash of the wrong palette.
+       Wrapped in try/catch because localStorage throws outright in some privacy modes. *@
+    <script>
+        (function () {
+            try {
+                var stored = localStorage.getItem('handlevett-theme');
+                if (stored === 'dark' || stored === 'light') {
+                    document.documentElement.setAttribute('data-theme', stored);
+                }
+            } catch (e) { /* no stored preference — fall through to prefers-color-scheme */ }
+        }());
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body data-empty-render="@(ViewData["EmptyRender"] as string ?? "false")">
+    <header class="app-header">
+        <a class="wordmark" asp-area="" asp-page="/Index">
+            <span class="wordmark-mark" aria-hidden="true">H</span>
+            Handlevett
+        </a>
+
+        <nav class="app-nav" aria-label="Hovedmeny">
+            <a asp-page="/Index" aria-current="@NavCurrent("/Index")">Middagsplanlegger</a>
+            <a asp-page="/Products" aria-current="@NavCurrent("/Products")">Varer</a>
+        </nav>
+
+        <div class="header-tools">
+            <span class="status-pill" id="warmup-pill" role="status" aria-live="polite" hidden>
+                <span class="status-pill-dot" aria-hidden="true"></span>
+                <span id="warmup-text"></span>
+            </span>
+
+            <button type="button" class="icon-button theme-toggle" id="theme-toggle"
+                    aria-pressed="false" title="Bytt mellom lyst og mørkt tema">
+                <span class="visually-hidden">Bytt mellom lyst og mørkt tema</span>
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="4" />
+                    <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+                </svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <div class="app-frame">
+        <main role="main">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="app-footer">
+        <p>Handlevett finner billige middager ut fra hva som faktisk er på tilbud i norske butikker akkurat nå.</p>
+        <p>Priser fra Kassal.app. Estimater er veiledende – sjekk butikkens egen pris før du handler.</p>
+    </footer>
+
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
