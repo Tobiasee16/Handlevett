@@ -1,0 +1,33 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["build", "--no-restore"],
+      "problemMatcher": "$msCompile",
+      "group": "build",
+      "presentation": { "reveal": "silent" }
+    },
+    {
+      "label": "watch",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["watch", "run", "--urls", "http://localhost:5286"],
+      "problemMatcher": "$msCompile",
+      "isBackground": true,
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "runOptions": { "instanceLimit": 1 }
+    },
+    {
+      "label": "kill-and-run",
+      "type": "shell",
+      "command": "Get-CimInstance Win32_Process -Filter \"name = 'dotnet.exe'\" | Where-Object { $_.CommandLine -match 'Handlevett' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; dotnet run --urls http://localhost:5286",
+      "problemMatcher": "$msCompile",
+      "isBackground": true,
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "runOptions": { "instanceLimit": 1 }
+    }
+  ]
+}
